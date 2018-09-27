@@ -357,8 +357,8 @@ def train(sess, env, actor, critic, actor_noise,
             replay_buffer.add(np.reshape(s, actor.s_dim), np.reshape(a, (actor.a_dim,)), r,
                               done, np.reshape(s2, actor.s_dim))
 
-            # Train every 50 frames
-            if frame % 50 == 49:
+            # Train every minibatch_size frames
+            if frame % minibatch_size == minibatch_size - 1:
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
                     replay_buffer.sample_batch(minibatch_size)
 
