@@ -335,6 +335,8 @@ def train(sess, env, actor, critic, actor_noise,
     replay_buffer = ReplayBuffer(buffer_size)
     ep_rewards = []
 
+    reward_file = open('data/rewards.txt', 'a+')
+
     for episode in tqdm(range(max_episodes), desc="episode"):
 
         s = env.reset()
@@ -355,37 +357,42 @@ def train(sess, env, actor, critic, actor_noise,
             replay_buffer.add(np.reshape(s, actor.s_dim), np.reshape(a, (actor.a_dim,)), r,
                               done, np.reshape(s2, actor.s_dim))
 
-        # Train every once per episode
-        s_batch, a_batch, r_batch, t_batch, s2_batch = \
-            replay_buffer.sample_batch(minibatch_size)
+            # Train every 50 frames
+            if frame % 50 == 49:
+                s_batch, a_batch, r_batch, t_batch, s2_batch = \
+                    replay_buffer.sample_batch(minibatch_size)
 
-        target_q = critic.predict_target(
-            s2_batch, actor.predict_target(s2_batch)
-        )
+                target_q = critic.predict_target(
+                    s2_batch, actor.predict_target(s2_batch)
+                )
 
-        y_i = []
-        for k in range(minibatch_size):
-            if t_batch[k]:
-                y_i.append(r_batch[k])
-            else:
-                y_i.append(r_batch[k] + critic.gamma * target_q[k])
+                y_i = []
+                for k in range(minibatch_size):
+                    if t_batch[k]:
+                        y_i.append(r_batch[k])
+                    else:
+                        y_i.append(r_batch[k] + critic.gamma * target_q[k])
 
-        # Update the critic given the targets
-        predicted_q_value, _ = critic.train(
-            s_batch, a_batch, np.reshape(y_i, (minibatch_size, 1)))
+                # Update the critic given the targets
+                predicted_q_value, _ = critic.train(
+                    s_batch, a_batch, np.reshape(y_i, (minibatch_size, 1)))
 
-        ep_ave_max_q += np.amax(predicted_q_value)
+                ep_ave_max_q += np.amax(predicted_q_value)
 
-        # Update the actor policy using the sampled gradient
-        a_outs = actor.predict(s_batch)
-        grads = critic.action_gradients(s_batch, a_outs)
-        actor.train(s_batch, grads[0])
+                # Update the actor policy using the sampled gradient
+                a_outs = actor.predict(s_batch)
+                grads = critic.action_gradients(s_batch, a_outs)
+                actor.train(s_batch, grads[0])
 
-        # Update target networks
-        actor.update_target_network()
-        critic.update_target_network()
+                # Update target networks
+                actor.update_target_network()
+                critic.update_target_network()
 
         ep_rewards.append(ep_reward)
+        reward_file.write(ep_reward)
+        reward_file.write('\n')
+        reward_file.flush()
+    reward_file.close()
     return ep_rewards
 
 
@@ -396,7 +403,7 @@ def main():
     tau = 0.001
     minibatch_size = 64
     buffer_size = 1000000
-    max_episodes = 10  # 50000
+    max_episodes = 1000  # 500000
     max_episode_len = 500
 
     with tf.Session() as sess:
