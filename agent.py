@@ -124,9 +124,22 @@ class ActorNetwork(object):
 
     def create_actor_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
-        net = tflearn.fully_connected(inputs, 400)
+        net = tflearn.conv_2d(inputs, 16, 3, 2)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
+
+        net = tflearn.conv_2d(net, 32, 3, 2)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
+        net = tflearn.conv_2d(net, 64, 3, 1)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
+        net = tflearn.fully_connected(net, 400)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
         net = tflearn.fully_connected(net, 300)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -210,7 +223,20 @@ class CriticNetwork(object):
     def create_critic_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
         action = tflearn.input_data(shape=[None, self.a_dim])
-        net = tflearn.fully_connected(inputs, 400)
+
+        net = tflearn.conv_2d(inputs, 16, 3, 2)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
+        net = tflearn.conv_2d(net, 32, 3, 2)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
+        net = tflearn.conv_2d(net, 64, 3, 1)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+
+        net = tflearn.fully_connected(net, 400)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
 
@@ -308,8 +334,9 @@ def train(sess, env, actor, critic, actor_noise,
     critic.update_target_network()
 
     replay_buffer = ReplayBuffer(buffer_size)
+    ep_rewards = []
 
-    for episode in tqdm(range(EPISODES), desc="episode"):
+    for episode in tqdm(range(max_episodes), desc="episode"):
 
         s = env.reset()
 
@@ -323,6 +350,8 @@ def train(sess, env, actor, critic, actor_noise,
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
             s2, r, done, info = env.step(action)
+
+            ep_reward += r
 
             replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
                               done, np.reshape(s2, (actor.s_dim,)))
@@ -356,6 +385,8 @@ def train(sess, env, actor, critic, actor_noise,
                 # Update target networks
                 actor.update_target_network()
                 critic.update_target_network()
+        ep_rewards.append(ep_reward)
+    return ep_rewards
 
 
 def main():
@@ -387,54 +418,17 @@ def main():
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
-        train(sess, env, actor, critic, actor_noise, minibatch_size, buffer_size, max_episodes, max_episode_len)
+        rewards = train(sess, env, actor, critic, actor_noise, minibatch_size, buffer_size, max_episodes, max_episode_len)
 
+    env.close()
 
+    print("\n." * 5, flush=True)  # this is due to TQDM - to create space
 
-EPISODES = 10
-DEBUG = True
-SHOW_CAMERA = True
-if args.no_render:
-    SHOW_CAMERA = False  # We recommend you don't change this
-env = gym.make("Duckietown-Lf-Lfv-Navv-Silent-v0")
-env.reset()
-rewards = []
-reward_buf = 0.0
-challenge = None
-
-
-for episode in tqdm(range(EPISODES), desc="episode"):
-
-    # 500 is the default max episode length for the LF/LFV task
-    for frame in tqdm(range(500), desc="frame"):
-        action = env.action_space.sample()
-
-        obs, rew, done, misc = env.step(action)
-
-        if SHOW_CAMERA:
-            env.render("human")  # this might fail if run in a container
-
-        # Add reward to buffer
-        reward_buf += rew
-
-        if done:
-            break
-
-    env.reset()
-
-    rewards.append(reward_buf)
-    reward_buf = 0
-
-print("\n."*5, flush=True) # this is due to TQDM - to create space
-
-print("[Challenge: {}] The average reward of {} episodes was {}. "
-      "Best episode: {}, worst episode: {}".format(
-    challenge,
-    EPISODES,
-    np.around(np.mean(rewards), 4),
-    np.around(np.max(rewards), 4),
-    np.around(np.min(rewards), 4)
-))
-
-# This also doesn't do anything, but it follows gym convention.
-env.close()
+    print("[Challenge: {}] The average reward of {} episodes was {}. "
+          "Best episode: {}, worst episode: {}".format(
+        'LF',
+        max_episodes,
+        np.around(np.mean(rewards), 4),
+        np.around(np.max(rewards), 4),
+        np.around(np.min(rewards), 4)
+    ))
