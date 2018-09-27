@@ -389,8 +389,7 @@ def train(sess, env, actor, critic, actor_noise,
                 critic.update_target_network()
 
         ep_rewards.append(ep_reward)
-        reward_file.write(ep_reward)
-        reward_file.write('\n')
+        reward_file.write('{}\n'.format(ep_reward))
         reward_file.flush()
     reward_file.close()
     return ep_rewards
