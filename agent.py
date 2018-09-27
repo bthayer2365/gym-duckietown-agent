@@ -27,7 +27,6 @@ from collections import deque
 import random
 import numpy as np
 
-
 class ReplayBuffer(object):
 
     def __init__(self, buffer_size, random_seed=123):
@@ -123,7 +122,7 @@ class ActorNetwork(object):
             self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
+        inputs = tflearn.input_data(shape=(None, ) + self.s_dim)
         net = tflearn.conv_2d(inputs, 16, 3, 2)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -221,8 +220,8 @@ class CriticNetwork(object):
         self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
-        action = tflearn.input_data(shape=[None, self.a_dim])
+        inputs = tflearn.input_data(shape=(None, ) + self.s_dim)
+        action = tflearn.input_data(shape=(None, self.a_dim))
 
         net = tflearn.conv_2d(inputs, 16, 3, 2)
         net = tflearn.layers.normalization.batch_normalization(net)
@@ -325,7 +324,7 @@ def build_summaries():
 
 def train(sess, env, actor, critic, actor_noise,
           minibatch_size, buffer_size, max_episodes, max_episode_len):
-
+    print("Training started")
     summary_ops, summary_vars = build_summaries()
 
     sess.run(tf.global_variables_initializer())
@@ -347,14 +346,14 @@ def train(sess, env, actor, critic, actor_noise,
         for frame in tqdm(range(max_episode_len), desc="frame"):
             action = env.action_space.sample()
 
-            a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
+            a = actor.predict(np.reshape(s, (1,) + (actor.s_dim))) + actor_noise()
 
             s2, r, done, info = env.step(action)
 
             ep_reward += r
 
-            replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
-                              done, np.reshape(s2, (actor.s_dim,)))
+            replay_buffer.add(np.reshape(s, actor.s_dim), np.reshape(a, (actor.a_dim,)), r,
+                              done, np.reshape(s2, actor.s_dim))
 
             if replay_buffer.size() > minibatch_size:
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
@@ -396,16 +395,16 @@ def main():
     tau = 0.001
     minibatch_size = 64
     buffer_size = 1000000
-    max_episodes = 500000
+    max_episodes = 10  # 50000
     max_episode_len = 500
 
     with tf.Session() as sess:
         env = gym.make("Duckietown-Lf-Lfv-Navv-Silent-v0")
-        state_dim = env.observation_space.shape[0]
+        state_dim = env.observation_space.shape
         action_dim = env.action_space.shape[0]
         action_bound = env.action_space.high
 
-        assert (env.action_space.high == -env.action_space.low)
+        assert (env.action_space.high == -env.action_space.low).all()
 
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
                              actor_lr, tau,
@@ -432,3 +431,7 @@ def main():
         np.around(np.max(rewards), 4),
         np.around(np.min(rewards), 4)
     ))
+
+
+if __name__ == '__main__':
+    main()
