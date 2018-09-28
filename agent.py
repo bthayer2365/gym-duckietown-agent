@@ -142,8 +142,8 @@ class ActorNetwork(object):
         net = tflearn.fully_connected(net, 300)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
-        # Final layer weights are init to Uniform[-3e-3, 3e-3]
-        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+
+        w_init = tflearn.initializations.uniform(minval=-1.0, maxval=1.0)
         out = tflearn.fully_connected(
             net, self.a_dim, activation='tanh', weights_init=w_init)
         # Scale output to -action_bound to action_bound
@@ -249,7 +249,7 @@ class CriticNetwork(object):
 
         # linear layer connected to 1 output representing Q(s,a)
         # Weights are init to Uniform[-3e-3, 3e-3]
-        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+        w_init = tflearn.initializations.uniform(minval=-1.0, maxval=1.0)
         out = tflearn.fully_connected(net, 1, weights_init=w_init)
         return inputs, action, out
 
